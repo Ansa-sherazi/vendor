@@ -1,0 +1,98 @@
+<?php
+
+session_start();
+include ("include/header.php");
+require("include/connection.php");
+
+if(isset($_POST['resetpass']) && $_SERVER['REQUEST_METHOD']=="POST") {
+    $newPassword = $_POST['newPassword'];
+    $confirmNewPassword = $_POST['confirmNewPassword'];
+
+    // Validate password match
+    if ($newPassword !== $confirmNewPassword) {
+        $_SESSION['error'] = "Passwords do not match!";
+        header("Location: resetpass.php?token=" . $_GET['token']);
+        exit();
+    }
+
+    // Validate token
+    if (!isset($_GET['token'])) {
+        $_SESSION['error'] = "Invalid token!";
+        header("Location: login.php");
+        exit();
+    }
+
+    $token = $_GET['token'];
+
+    // Check if token exists in the database
+    $stmt = $conn->prepare("SELECT email FROM users WHERE token = ?");
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+    $stmt->store_result();
+
+    if ($stmt->num_rows == 0) {
+        $_SESSION['error'] = "Invalid or expired token!";
+        header("Location: login.php");
+        exit();
+    }
+
+    $stmt->bind_result($email);
+    $stmt->fetch();
+    $stmt->close();
+
+    // Hash the new password
+    $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+
+    // Update password in the database
+    $stmt = $connection->prepare("UPDATE users SET password = ?, token = NULL WHERE email = ?");
+    $stmt->bind_param("ss", $hashedPassword, $email);
+
+    if ($stmt->execute()) {
+        $_SESSION['success'] = "Password reset successfully! Please login.";
+        header("Location: login.php");
+    } else {
+        $_SESSION['error'] = "Something went wrong. Try again!";
+        header("Location: resetpass.php?token=" . $token);
+    }
+
+    $stmt->close();
+    $connection->close();
+}
+?>
+
+<body>
+<div class="container">
+    <div class="wrapper">
+        <form id="resetForm" method="POST" action="resetpass.php" autocomplete="off">
+            <h1>Reset Password</h1>
+            
+            <div class="input-box">
+                <input type="password" id="newPassword" name="newPassword" placeholder="New Password" required autocomplete="new-password">
+                <i class='bx bxs-lock-alt'></i>
+                <span class="toggle-icon" onclick="togglePassword('newPassword', this)">
+                    <i class="fa-solid fa-eye"></i>
+                </span>
+                <p class="error-message"></p>
+            </div>
+
+            <div class="input-box">
+                <input type="password" id="confirmNewPassword" name="confirmNewPassword" placeholder="Confirm Password" required autocomplete="new-password">
+                <i class='bx bxs-lock-alt'></i>
+                <span class="toggle-icon" onclick="togglePassword('confirmNewPassword', this)">
+                    <i class="fa-solid fa-eye"></i>
+                </span>
+                <p class="error-message"></p>
+            </div>
+
+            <button type="submit" class="btn" name="resetpass">Reset Password</button>
+
+            <div class="register-link">
+                <p>Remembered your password? <a href="login.php">Login</a></p>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="css_java/java.js"></script>
+</body>
+</html>
